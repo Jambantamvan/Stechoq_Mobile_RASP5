@@ -64,7 +64,7 @@ except ImportError:
 # ===== CONFIGURATION =====
 RECORD_SECONDS = 5          # Durasi rekaman default
 WHISPER_MODEL = "small"     # Model Whisper: tiny, base, small, medium, large
-AI_MODEL = "qwen2.5:1.5b"   # Model Ollama
+AI_MODEL = "qwen2.5:0.5b"   # Model Ollama (0.5b ringan untuk Raspberry Pi)
 
 # Whisper Precision Settings (balanced for Raspberry Pi)
 WHISPER_BEAM_SIZE = 3       # Lebih tinggi = lebih presisi (1-5, default: 1)
@@ -222,6 +222,13 @@ class VoiceAITest:
         signal_std = arr.std()
         print(f"   Signal level - Max: {signal_max:.0f}, Std: {signal_std:.0f}")
         
+        # DETEKSI NOISE: Jika std > 1 milyar, ini noise random bukan audio valid
+        # Signal valid dari INMP441 biasanya std antara 1 juta - 100 juta
+        if signal_std > 1000000000:  # > 1 milyar = noise random
+            print("   ❌ NOISE TERDETEKSI! Signal adalah random noise, bukan audio.")
+            print("   💡 Cek koneksi kabel, terutama pin SD (Pin 38)")
+            return None  # Jangan proses noise
+        
         if signal_std < 100000:
             print("   ⚠️ Signal sangat lemah! Coba bicara lebih keras atau cek wiring.")
         
@@ -321,7 +328,24 @@ class VoiceAITest:
                 messages=[
                     {
                         'role': 'system',
-                        'content': 'Kamu adalah asisten AI yang ramah. Jawab dalam Bahasa Indonesia dengan singkat dan jelas.'
+                        'content': '''Kamu adalah asisten robot pengontrol gerakan. Tugasmu HANYA menginterpretasi perintah gerakan.
+
+PERINTAH YANG VALID:
+- MAJU [angka] meter/langkah
+- MUNDUR [angka] meter/langkah  
+- BELOK KANAN [angka] derajat (default 90)
+- BELOK KIRI [angka] derajat (default 90)
+- LURUS [angka] meter
+- BERHENTI / STOP
+- PUTAR BALIK (180 derajat)
+
+FORMAT RESPONS:
+Jika perintah valid, jawab: "OK, [aksi]. Perintah: [KODE]"
+Kode: MAJU_X, MUNDUR_X, KANAN_X, KIRI_X, LURUS_X, STOP, PUTAR
+
+Jika tidak valid/tidak jelas, jawab: "Maaf, perintah tidak dikenali. Contoh: Maju 5 meter, Belok kanan, Mundur 2 langkah"
+
+Jawab SINGKAT dalam 1-2 kalimat saja.'''
                     },
                     {
                         'role': 'user',
@@ -329,8 +353,8 @@ class VoiceAITest:
                     }
                 ],
                 options={
-                    'temperature': 0.7,
-                    'num_predict': 200
+                    'temperature': 0.3,
+                    'num_predict': 100
                 }
             )
             
@@ -344,6 +368,42 @@ class VoiceAITest:
             print(f"   ollama pull {AI_MODEL}")
             return f"[Echo tanpa AI] Anda berkata: \"{text}\""
     
+    def parse_command(self, text):
+        """Parse voice command untuk gerakan robot"""
+        import re
+        
+        text_lower = text.lower().strip()
+        
+        # Ekstrak angka dari teks
+        numbers = re.findall(r'\d+', text)
+        distance = int(numbers[0]) if numbers else 1
+        
+        # Deteksi perintah
+        command = None
+        
+        if any(word in text_lower for word in ['maju', 'kedepan', 'ke depan', 'forward']):
+            command = f"MAJU_{distance}"
+        elif any(word in text_lower for word in ['mundur', 'kebelakang', 'ke belakang', 'backward', 'back']):
+            command = f"MUNDUR_{distance}"
+        elif any(word in text_lower for word in ['kanan', 'right']):
+            if 'belok' in text_lower or 'putar' in text_lower:
+                command = f"KANAN_{distance if numbers else 90}"
+            else:
+                command = "KANAN_90"
+        elif any(word in text_lower for word in ['kiri', 'left']):
+            if 'belok' in text_lower or 'putar' in text_lower:
+                command = f"KIRI_{distance if numbers else 90}"
+            else:
+                command = "KIRI_90"
+        elif any(word in text_lower for word in ['lurus', 'straight']):
+            command = f"LURUS_{distance}"
+        elif any(word in text_lower for word in ['stop', 'berhenti', 'halt']):
+            command = "STOP"
+        elif any(word in text_lower for word in ['putar balik', 'balik', 'uturn', 'u-turn']):
+            command = "PUTAR_180"
+        
+        return command
+    
     def cleanup(self):
         """Cleanup resources"""
         if self.audio:
@@ -351,20 +411,22 @@ class VoiceAITest:
 
 def main():
     print("=" * 60)
-    print("🎤 TEST VOICE TO AI - INMP441 + Whisper + Ollama")
+    print("🤖 ROBOT VOICE COMMAND - INMP441 + Whisper + Ollama")
     print("=" * 60)
     print("""
-Wiring INMP441 ke Raspberry Pi 5:
-┌─────────────┬───────────────────┐
-│ INMP441 Pin │ Raspberry Pi 5    │
-├─────────────┼───────────────────┤
-│ VDD         │ Pin 1  (3.3V)     │
-│ GND         │ Pin 6  (Ground)   │
-│ SD (Data)   │ Pin 38 (GPIO 20)  │
-│ WS (LRCLK)  │ Pin 35 (GPIO 19)  │
-│ SCK (BCLK)  │ Pin 12 (GPIO 18)  │
-│ L/R         │ Pin 39 (Ground)   │
-└─────────────┴───────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│              PERINTAH YANG DIDUKUNG                        │
+├────────────────────────────────────────────────────────────┤
+│  🔹 "Maju [X] meter/langkah"      → Robot maju             │
+│  🔹 "Mundur [X] meter/langkah"    → Robot mundur           │
+│  🔹 "Belok kanan [X] derajat"     → Belok ke kanan         │
+│  🔹 "Belok kiri [X] derajat"      → Belok ke kiri          │
+│  🔹 "Lurus [X] meter"             → Jalan lurus            │
+│  🔹 "Berhenti" / "Stop"           → Robot berhenti         │
+│  🔹 "Putar balik"                 → Putar 180 derajat      │
+└────────────────────────────────────────────────────────────┘
+
+Wiring INMP441: VDD→Pin1, GND→Pin6, SD→Pin38, WS→Pin35, SCK→Pin12, L/R→Pin39
 """)
     
     tester = VoiceAITest()
@@ -409,6 +471,13 @@ Wiring INMP441 ke Raspberry Pi 5:
                 print("\n" + "-" * 40)
                 print(f"👤 ANDA: {text}")
                 print("-" * 40)
+                
+                # Parse command langsung dari teks
+                command = tester.parse_command(text)
+                if command:
+                    print(f"📡 COMMAND DETECTED: {command}")
+                else:
+                    print("⚠️ Tidak ada perintah gerakan yang dikenali")
                 
                 # Get AI response
                 ai_response = tester.ask_ai(text)
