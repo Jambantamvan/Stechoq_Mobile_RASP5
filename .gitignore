@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Temp files
+*.tmp
+*.wav
+*.log
+
+# Model files (too large for git)
+*.onnx
+*.onnx.json
+
+# OS
+.DS_Store
+Thumbs.db

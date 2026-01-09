@@ -1,0 +1,70 @@
+# AI Voice Robot Controller - Raspberry Pi 5 Requirements
+# Optimized for ARM64 architecture dan hardware Raspberry Pi 5
+
+# ===== SPEECH RECOGNITION & AUDIO =====
+# Faster-Whisper untuk offline STT (ARM64 optimized)
+faster-whisper>=1.0.0
+
+# Speech Recognition library
+SpeechRecognition>=3.10.0
+
+# Audio libraries untuk Raspberry Pi (INMP441 I2S & USB Mic)
+PyAudio>=0.2.13
+sounddevice>=0.4.6
+numpy>=1.24.0
+
+# ALSA tools untuk Raspberry Pi audio
+# Note: install system packages: sudo apt install alsa-utils portaudio19-dev
+
+# ===== INMP441 I2S MICROPHONE NOTES =====
+# Untuk menggunakan INMP441, tambahkan ke /boot/config.txt:
+#   dtparam=i2s=on
+#   dtoverlay=googlevoicehat-soundcard
+# atau:
+#   dtoverlay=i2s-mems-mic
+# Lalu reboot Raspberry Pi
+#
+# Wiring INMP441 ke Raspberry Pi 5:
+#   VDD  -> 3.3V (Pin 1)
+#   GND  -> GND (Pin 6)
+#   SD   -> GPIO 21 (Pin 40) - I2S Data
+#   WS   -> GPIO 19 (Pin 35) - I2S Word Select (LRCLK)
+#   SCK  -> GPIO 18 (Pin 12) - I2S Clock (BCLK)
+#   L/R  -> GND (Left channel) atau 3.3V (Right channel)
+
+# ===== AI INTEGRATION =====
+# Ollama client untuk local AI
+ollama>=0.1.0
+
+# ===== SERIAL COMMUNICATION =====
+# PySerial untuk komunikasi dengan ESP32
+pyserial>=3.5
+
+# ===== RASPBERRY PI GPIO =====
+# GPIO control untuk status LEDs
+RPi.GPIO>=0.7.0
+
+# ===== UTILITIES =====
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# ===== TEXT-TO-SPEECH =====
+# Sistem akan menggunakan Piper TTS binary
+
+# ===== PERFORMANCE OPTIMIZATION =====
+# Optimized tokenizers untuk ARM64
+tokenizers>=0.15.0,<0.20.0
+
+# ===== SYSTEM DEPENDENCIES NOTES =====
+# Install these system packages first:
+# sudo apt update
+# sudo apt install -y python3-pip python3-venv python3-dev
+# sudo apt install -y portaudio19-dev alsa-utils
+# sudo apt install -y build-essential cmake
+# sudo apt install -y git curl wget
+# sudo apt install -y pulseaudio pulseaudio-utils
+
+# ===== OPTIONAL DEPENDENCIES =====
+# For better audio processing on Pi 5
+scipy>=1.10.0
+librosa>=0.10.0
